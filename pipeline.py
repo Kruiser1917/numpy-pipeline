@@ -45,3 +45,25 @@ def add_dirt(X: np.ndarray, y: np.ndarray, nan_frac: float = 0.02, n_outliers: i
     y = np.concatenate([y, y[dup]])
     order = rng.permutation(len(X))
     return X[order], y[order]
+
+def drop_duplicates(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Удаляет полностью совпадающие строки X (вместе с их y), оставляя первое вхождение.
+
+    NaN != NaN, поэтому для сравнения пропуски временно заменяем на +inf.
+    """
+    key = np.where(np.isnan(X), np.inf, X)
+    _, first = np.unique(key, axis=0, return_index=True)
+    keep = np.sort(first)                  # исходный порядок строк
+    return X[keep], y[keep]
+
+
+def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2,
+                     seed: int = 42) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Перемешивает строки и делит на train и test. Возвращает X_train, X_test, y_train, y_test."""
+    if not 0 < test_size < 1:
+        raise ValueError("test_size должен быть между 0 и 1")
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(X))
+    n_test = round(len(X) * test_size)
+    test_idx, train_idx = idx[:n_test], idx[n_test:]
+    return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
