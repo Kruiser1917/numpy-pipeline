@@ -140,3 +140,26 @@ def load_dataset(path: str | Path) -> tuple[dict, dict]:
         params = {k.removeprefix("param_"): data[k] for k in data.files if k.startswith("param_")}
     params["method"] = str(params["method"])
     return arrays, params
+
+# ---------- дополнительно: корреляции и батчи ----------
+def correlation_matrix(X: np.ndarray) -> np.ndarray:
+    """Корреляции Пирсона всех признаков со всеми: матрица (n_features, n_features)."""
+    return np.corrcoef(X, rowvar=False)
+
+
+def top_correlated_pairs(corr: np.ndarray, k: int = 3) -> list[tuple[int, int, float]]:
+    """k пар признаков с самой сильной связью по модулю: [(i, j, r), ...]."""
+    i, j = np.triu_indices(len(corr), k=1)            # пары над диагональю: каждая по одному разу
+    order = np.argsort(-np.abs(corr[i, j]))[:k]        # по убыванию |r|
+    return [(int(i[o]), int(j[o]), float(corr[i[o], j[o]])) for o in order]
+
+
+def iter_batches(X: np.ndarray, y: np.ndarray, batch_size: int = 64, shuffle: bool = True,
+                 seed: int = 42):
+    """Выдаёт данные кусками по batch_size строк; последний кусок может быть меньше."""
+    if batch_size <= 0:
+        raise ValueError("batch_size должен быть больше нуля")
+    idx = np.random.default_rng(seed).permutation(len(X)) if shuffle else np.arange(len(X))
+    for start in range(0, len(X), batch_size):
+        part = idx[start:start + batch_size]
+        yield X[part], y[part]
