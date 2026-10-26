@@ -67,3 +67,45 @@ def train_test_split(X: np.ndarray, y: np.ndarray, test_size: float = 0.2,
     n_test = round(len(X) * test_size)
     test_idx, train_idx = idx[:n_test], idx[n_test:]
     return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
+
+# ---------- чистка: отдельные этапы ----------
+def fill_missing(X: np.ndarray, medians: np.ndarray) -> np.ndarray:
+    """NaN → медиана своего столбца."""
+    return np.where(np.isnan(X), medians, X)
+
+
+def clip_outliers(X: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
+    """Всё, что ниже low или выше high, прижимаем к границе своего столбца."""
+    return np.clip(X, low, high)
+
+
+def scale(X: np.ndarray, center: np.ndarray, spread: np.ndarray) -> np.ndarray:
+    """(X − center) / spread: стандартизация или MinMax, смотря что передали."""
+    return (X - center) / spread
+
+
+# ---------- fit на train, transform на чём угодно ----------
+def fit_preprocessor(X_train: np.ndarray, method: str = "standard", iqr_k: float = 3.0) -> dict:
+    """Считает параметры чистки ТОЛЬКО по train: медианы, границы выбросов, центр и разброс."""
+    medians = np.nanmedian(X_train, axis=0)
+    X = fill_missing(X_train, medians)
+    q1, q3 = np.percentile(X, [25, 75], axis=0)
+    iqr = q3 - q1
+    low, high = q1 - iqr_k * iqr, q3 + iqr_k * iqr
+    X = clip_outliers(X, low, high)
+    if method == "standard":
+        center, spread = X.mean(axis=0), X.std(axis=0)
+    elif method == "minmax":
+        center, spread = X.min(axis=0), X.max(axis=0) - X.min(axis=0)
+    else:
+        raise ValueError("method должен быть 'standard' или 'minmax'")
+    spread = np.where(spread == 0, 1.0, spread)       # постоянный столбец: не делим на 0
+    return {"method": method, "medians": medians, "low": low, "high": high,
+            "center": center, "spread": spread}
+
+
+def transform(X: np.ndarray, params: dict) -> np.ndarray:
+    """Применяет параметры, посчитанные по train, к любым данным: train, test, новым."""
+    X = fill_missing(X, params["medians"])
+    X = clip_outliers(X, params["low"], params["high"])
+    return scale(X, params["center"], params["spread"])
