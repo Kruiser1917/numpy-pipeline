@@ -1,4 +1,5 @@
 """Пайплайн подготовки числового датасета на чистом NumPy."""
+from pathlib import Path
 import numpy as np
 
 # у каждого признака свой масштаб — как в реальных данных (возраст, доход, проценты...)
@@ -109,3 +110,33 @@ def transform(X: np.ndarray, params: dict) -> np.ndarray:
     X = fill_missing(X, params["medians"])
     X = clip_outliers(X, params["low"], params["high"])
     return scale(X, params["center"], params["spread"])
+
+# ---------- проверка и сохранение ----------
+def check_train(X_train: np.ndarray, method: str = "standard", atol: float = 1e-6) -> bool:
+    """Train после чистки: нет NaN; standard → mean ≈ 0, std ≈ 1; minmax → min ≈ 0, max ≈ 1."""
+    if np.isnan(X_train).any():
+        return False
+    if method == "standard":
+        return bool(np.allclose(X_train.mean(axis=0), 0, atol=atol)
+                    and np.allclose(X_train.std(axis=0), 1, atol=atol))
+    return bool(np.allclose(X_train.min(axis=0), 0, atol=atol)
+                and np.allclose(X_train.max(axis=0), 1, atol=atol))
+
+
+def save_dataset(path: str | Path, X_train: np.ndarray, X_test: np.ndarray,
+                 y_train: np.ndarray, y_test: np.ndarray, params: dict) -> Path:
+    """Сохраняет выборки и параметры чистки в один .npz — чтобы потом так же обработать новые данные."""
+    path = Path(path).with_suffix(".npz")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(path, X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test,
+             **{f"param_{name}": value for name, value in params.items()})
+    return path
+
+
+def load_dataset(path: str | Path) -> tuple[dict, dict]:
+    """Читает .npz обратно: словарь массивов и словарь параметров."""
+    with np.load(path) as data:
+        arrays = {k: data[k] for k in data.files if not k.startswith("param_")}
+        params = {k.removeprefix("param_"): data[k] for k in data.files if k.startswith("param_")}
+    params["method"] = str(params["method"])
+    return arrays, params
